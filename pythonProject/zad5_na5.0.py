@@ -19,46 +19,33 @@ def shutdown():
 
 def render(time):
     glClear(GL_COLOR_BUFFER_BIT)
+    resolution = 500
 
     random.seed()
-    sierpinski_carpet(-50, -50, 200, 100, 0, 3)
+    for x in range(resolution):
+        for y in range(resolution):
+            real = (x / resolution) * 4 - 2
+            imag = (y / resolution) * 4 - 2
+            c = real + imag * 1j
+
+            mandelbrot_set(0, c, 20)
     glFlush()
 
 
-def draw_rectangle(x, y, a, b):
-    red = random.random()
-    green = random.random()
-    blue = random.random()
-    glColor3f(red, green, blue)
-    glBegin(GL_TRIANGLES)
-    glVertex2f(x, y)
-    glVertex2f(x + a, y)
-    glVertex2f(x, y + b)
+def mandelbrot_set(z, c, number_of_checks):
+    limit = z
+    for x in range(number_of_checks):
+        limit = limit**2 + c
+        if abs(limit) > 2:
+            glColor3f(1.0, 0.0, 0.0)
+            break
+    else:
+        glColor3f(0.0, 0.0, 0.0)
 
-    glColor3f(blue, green, red)
-    glVertex2f(x + a, y)
-    glVertex2f(x + a, y + b)
-    glVertex2f(x, y + b)
+    glPointSize(1.0)
+    glBegin(GL_POINTS)
+    glVertex2f(c.real * 2.0, c.imag * 2.0)
     glEnd()
-
-
-def sierpinski_carpet(x, y, a, b, current_depth, depth):
-    if current_depth == depth:
-        draw_rectangle(x, y, a, b)
-        return
-
-    new_a = a / 3
-    new_b = b / 3
-
-    for i in range(3):
-        for j in range(3):
-            if i == 1 and j == 1:
-                continue
-
-            new_x = x + i * new_a
-            new_y = y + j * new_b
-
-            sierpinski_carpet(new_x, new_y, new_a, new_b, current_depth + 1, depth)
 
 
 def update_viewport(window, width, height):
@@ -73,7 +60,7 @@ def update_viewport(window, width, height):
     glLoadIdentity()
 
     if width <= height:
-        glOrtho(-100.0, 100.0, -100.0 / aspect_ratio, 100.0 / aspect_ratio,
+        glOrtho(-5.0, 5.0, -5.0 / aspect_ratio, 5.0 / aspect_ratio,
                 1.0, -1.0)
     else:
         glOrtho(-100.0 * aspect_ratio, 100.0 * aspect_ratio, -100.0, 100.0,

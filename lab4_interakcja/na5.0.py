@@ -9,18 +9,26 @@ from OpenGL.GLU import *
 
 viewer = [0.0, 0.0, 10.0]
 
+direction = [0.0, 0.0, -1.0]
+
 phi = 0.0
 theta = 0.0
 pix2angle = 1.0
 scale = 1.0
 
-key_pressed = 0
-right_mouse_button_pressed = 0
-left_mouse_button_pressed = 0
+movement_speed = 0.01
+
+keys_pressed = set()
+
 mouse_x_pos_old = 0
-delta_x = 0
 mouse_y_pos_old = 0
-delta_y = 0
+
+depth = 3
+size = 5
+base_tetra = [[0.0, 0.0, size * 1.0],
+              [0.0, size * 0.942809, size * -0.333333],
+              [size * -0.816497, size * -0.471405, size * -0.333333],
+              [size * 0.816497, size * -0.471405, size * -0.333333]]
 
 
 def startup():
@@ -51,78 +59,131 @@ def axes():
     glEnd()
 
 
-def example_object():
-    glColor3f(1.0, 1.0, 1.0)
+def draw_tetra(a, b, c, d):
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
 
-    quadric = gluNewQuadric()
-    gluQuadricDrawStyle(quadric, GLU_LINE)
-    glRotatef(90, 1.0, 0.0, 0.0)
-    glRotatef(-90, 0.0, 1.0, 0.0)
+    glBegin(GL_TRIANGLES)
+    glColor3fv(interpolate_color(a))
+    glVertex3fv(a)
+    glColor3fv(interpolate_color(a))
+    glVertex3fv(b)
+    glColor3fv(interpolate_color(a))
+    glVertex3fv(c)
+    glEnd()
 
-    gluSphere(quadric, 1.5, 10, 10)
+    glBegin(GL_TRIANGLES)
+    glColor3fv(interpolate_color(b))
+    glVertex3fv(a)
+    glColor3fv(interpolate_color(b))
+    glVertex3fv(b)
+    glColor3fv(interpolate_color(b))
+    glVertex3fv(d)
+    glEnd()
 
-    glTranslatef(0.0, 0.0, 1.1)
-    gluCylinder(quadric, 1.0, 1.5, 1.5, 10, 5)
-    glTranslatef(0.0, 0.0, -1.1)
+    glBegin(GL_TRIANGLES)
+    glColor3fv(interpolate_color(c))
+    glVertex3fv(a)
+    glColor3fv(interpolate_color(c))
+    glVertex3fv(c)
+    glColor3fv(interpolate_color(c))
+    glVertex3fv(d)
+    glEnd()
 
-    glTranslatef(0.0, 0.0, -2.6)
-    gluCylinder(quadric, 0.0, 1.0, 1.5, 10, 5)
-    glTranslatef(0.0, 0.0, 2.6)
+    glBegin(GL_TRIANGLES)
+    glColor3fv(interpolate_color(d))
+    glVertex3fv(b)
+    glColor3fv(interpolate_color(d))
+    glVertex3fv(c)
+    glColor3fv(interpolate_color(d))
+    glVertex3fv(d)
+    glEnd()
 
-    glRotatef(90, 1.0, 0.0, 1.0)
-    glTranslatef(0.0, 0.0, 1.5)
-    gluCylinder(quadric, 0.1, 0.0, 1.0, 5, 5)
-    glTranslatef(0.0, 0.0, -1.5)
-    glRotatef(-90, 1.0, 0.0, 1.0)
 
-    glRotatef(-90, 1.0, 0.0, 1.0)
-    glTranslatef(0.0, 0.0, 1.5)
-    gluCylinder(quadric, 0.1, 0.0, 1.0, 5, 5)
-    glTranslatef(0.0, 0.0, -1.5)
-    glRotatef(90, 1.0, 0.0, 1.0)
+def divide_tetra(a, b, c, d, m):
+    v = [[0] * 3 for i in range(6)]
+    if m > 0:
+        for j in range(3):
+            v[0][j] = (a[j] + b[j]) / 2
 
-    glRotatef(90, 0.0, 1.0, 0.0)
-    glRotatef(-90, 1.0, 0.0, 0.0)
-    gluDeleteQuadric(quadric)
+        for j in range(3):
+            v[1][j] = (a[j] + c[j]) / 2
+
+        for j in range(3):
+            v[2][j] = (b[j] + c[j]) / 2
+
+        for j in range(3):
+            v[3][j] = (a[j] + d[j]) / 2
+
+        for j in range(3):
+            v[4][j] = (b[j] + d[j]) / 2
+
+        for j in range(3):
+            v[5][j] = (c[j] + d[j]) / 2
+
+        divide_tetra(a, v[0], v[1], v[3], m - 1)
+        divide_tetra(v[0], b, v[2], v[4], m - 1)
+        divide_tetra(v[1], v[2], c, v[5], m - 1)
+        divide_tetra(v[3], v[4], v[5], d, m - 1)
+    else:
+        draw_tetra(a, b, c, d)
+
+
+def interpolate_color(v):
+    return [
+        (v[0] + 1.0) / 2.0,
+        (v[1] + 1.0) / 2.0,
+        (v[2] + 1.0) / 2.0,
+    ]
+
+
+def update_camera():
+    global direction
+
+    theta_rad = math.radians(theta)
+    phi_rad = math.radians(phi)
+
+    direction[0] = math.cos(phi_rad) * math.sin(theta_rad)
+    direction[1] = math.sin(phi_rad)
+    direction[2] = -math.cos(phi_rad) * math.cos(theta_rad)
+
+
+def handle_movement():
+    global viewer
+
+    forward = [x * movement_speed*30 for x in direction]
+    right = [
+        math.sin(math.radians(theta + 90)),
+        0.0,
+        -math.cos(math.radians(theta + 90))
+    ]
+
+    if "W" in keys_pressed:
+        viewer = [viewer[i] + forward[i] for i in range(3)]
+    if "S" in keys_pressed:
+        viewer = [viewer[i] - forward[i] for i in range(3)]
+    if "A" in keys_pressed:
+        viewer = [viewer[i] - right[i] for i in range(3)]
+    if "D" in keys_pressed:
+        viewer = [viewer[i] + right[i] for i in range(3)]
 
 
 def render(time):
-    global theta
-    global phi
-    global scale
-
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
     glLoadIdentity()
 
-    gluLookAt(viewer[0], viewer[1], viewer[2],
-              0.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+    update_camera()
+    handle_movement()
 
-    if left_mouse_button_pressed:
-        theta += delta_x * pix2angle
-        phi += delta_y * pix2angle
-        phi = phi % 360
+    look_at = [viewer[i] + direction[i] for i in range(3)]
 
-    if right_mouse_button_pressed:
-        scale += (delta_x + 1 - delta_y) / 500
-
-    if key_pressed:
-        thetaScaled = theta * math.pi / 180
-        phiScaled = (phi * math.pi / 180)
-        scale = max(scale, 0.0001)
-        x_eye = scale * math.cos(thetaScaled) * math.cos(phiScaled)
-        y_eye = scale * math.sin(phiScaled)
-        z_eye = scale * math.sin(thetaScaled) * math.cos(phiScaled)
-        if 90 < phi < 270 or -90 > phi > -270:
-            gluLookAt(x_eye, y_eye, z_eye, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0)
-        else:
-            gluLookAt(x_eye, y_eye, z_eye, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0)
-    else:
-        glRotatef(theta, 0.0, 1.0, 0.0)
-        glRotatef(phi, 1.0, 0.0, 0.0)
-        glScalef(scale, scale, scale)
+    gluLookAt(
+        viewer[0], viewer[1], viewer[2],
+        look_at[0], look_at[1], look_at[2],
+        0.0, 1.0, 0.0
+    )
 
     axes()
-    example_object()
+    divide_tetra(base_tetra[0], base_tetra[1], base_tetra[2], base_tetra[3], depth)
 
     glFlush()
 
@@ -145,44 +206,40 @@ def update_viewport(window, width, height):
     glLoadIdentity()
 
 
-def keyboard_key_callback(window, key, scancode, action, mods):
+def key_callback(window, key, scancode, action, mods):
+    global keys_pressed
+
+    key_map = {
+        GLFW_KEY_W: "W",
+        GLFW_KEY_S: "S",
+        GLFW_KEY_A: "A",
+        GLFW_KEY_D: "D"
+    }
+
+    if key in key_map:
+        if action == GLFW_PRESS:
+            keys_pressed.add(key_map[key])
+        elif action == GLFW_RELEASE:
+            keys_pressed.discard(key_map[key])
+
     if key == GLFW_KEY_ESCAPE and action == GLFW_PRESS:
         glfwSetWindowShouldClose(window, GLFW_TRUE)
 
 
-def key_callback(window, key, scancode, action, mods):
-    global key_pressed
-    if key == GLFW_KEY_X and action == GLFW_REPEAT:
-        key_pressed = 1
-    else:
-        key_pressed = 0
-
-
 def mouse_motion_callback(window, x_pos, y_pos):
-    global delta_x
-    global mouse_x_pos_old
-    global delta_y
-    global mouse_y_pos_old
+    global theta, phi
+    global mouse_x_pos_old, mouse_y_pos_old
 
     delta_x = x_pos - mouse_x_pos_old
-    mouse_x_pos_old = x_pos
     delta_y = y_pos - mouse_y_pos_old
+
+    mouse_x_pos_old = x_pos
     mouse_y_pos_old = y_pos
 
+    theta += delta_x * pix2angle
+    phi -= delta_y * pix2angle
 
-def mouse_button_callback(window, button, action, mods):
-    global left_mouse_button_pressed
-    global right_mouse_button_pressed
-
-    if button == GLFW_MOUSE_BUTTON_LEFT and action == GLFW_PRESS:
-        left_mouse_button_pressed = 1
-    else:
-        left_mouse_button_pressed = 0
-
-    if button == GLFW_MOUSE_BUTTON_RIGHT and action == GLFW_PRESS:
-        right_mouse_button_pressed = 1
-    else:
-        right_mouse_button_pressed = 0
+    phi = max(-89.0, min(89.0, phi))
 
 
 def main():
@@ -196,11 +253,9 @@ def main():
 
     glfwMakeContextCurrent(window)
     glfwSetFramebufferSizeCallback(window, update_viewport)
-    glfwSetKeyCallback(window, keyboard_key_callback)
     glfwSetKeyCallback(window, key_callback)
     glfwSetCursorPosCallback(window, mouse_motion_callback)
-    glfwSetMouseButtonCallback(window, mouse_button_callback)
-    glfwSwapInterval(1)
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED)
 
     startup()
     while not glfwWindowShouldClose(window):
